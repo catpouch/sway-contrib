@@ -8,6 +8,7 @@
 ##  - `wl-copy`: clipboard utility
 ##  - `jq`: json utility to parse swaymsg output
 ##  - `notify-send`: to show notifications
+##  - `wayfreeze`: to freeze displays
 ## Those are needed to be installed, if unsure, run `grimshot check`
 ##
 ## See `man 1 grimshot` or `grimshot usage` for further details.
@@ -47,6 +48,7 @@ any() {
 
 NOTIFY=no
 CURSOR=
+FREEZE=no
 WAIT=no
 
 getTargetDirectory() {
@@ -67,6 +69,10 @@ parseArgs() {
       ;;
     -c | --cursor)
       CURSOR=yes
+      shift
+      ;;
+    -f | --freeze)
+      FREEZE=yes
       shift
       ;;
     -w | --wait)
@@ -99,7 +105,7 @@ parseArgs() {
 
 printUsageMsg() {
   echo "Usage:"
-  echo "  grimshot [--notify] [--cursor] [--wait N] (copy|save) [active|screen|output|area|window|anything] [FILE|-]"
+  echo "  grimshot [--notify] [--cursor] [--freeze] [--wait N] (copy|save) [active|screen|output|area|window|anything] [FILE|-]"
   echo "  grimshot check"
   echo "  grimshot usage"
   echo ""
@@ -185,6 +191,7 @@ takeScreenshot() {
     "$geom_not_provided:$full_screenshot_action" \
     "true:$geometry_screenshot_action"
 }
+
 checkRequiredTools() {
   echo "Checking if required tools are installed. If something is missing, install it to your system and make it available in PATH..."
   check grim
@@ -193,6 +200,7 @@ checkRequiredTools() {
   check wl-copy
   check jq
   check notify-send
+  check wayfreeze
   exit
 }
 
@@ -234,6 +242,7 @@ selectAnything() {
   when "$geomIsEmpty" "exit 1"
   WHAT="Selection"
 }
+
 handleSaveCopy() {
   wl-copy --type image/png <"$FILE" || die "Clipboard error"
   MESSAGE="$MESSAGE and clipboard"
@@ -263,9 +272,17 @@ handleSave() {
     "handleScreenshotSuccess" \
     "handleScreenshotFailure"
 }
+
 handleUnknownSubject() {
   die "Unknown subject to take a screenshot from" "$SUBJECT"
 }
+
+handleFreeze() {
+  wayfreeze &
+  FREEZE_PID=$!
+  sleep .1;
+}
+
 handleScreenshot() {
   actionIsInvalid='[ "$ACTION" != "save" ] && [ "$ACTION" != "copy" ] && [ "$ACTION" != "savecopy" ] && [ "$ACTION" != "check" ]'
   actionIsCheck='[ "$ACTION" = "check" ]'
@@ -278,7 +295,12 @@ handleScreenshot() {
   subjectIsUnknown=true
   any \
     "$actionIsInvalid:printUsageMsg" \
-    "$actionIsCheck:checkRequiredTools" \
+    "$actionIsCheck:checkRequiredTools"
+  
+  freeze='[ "$FREEZE" != "no" ]'
+  when "$freeze" "handleFreeze"
+
+  any \
     "$subjectIsArea:selectArea" \
     "$subjectIsActiveWindow:selectActiveWindow" \
     "$subjectIsScreen:selectScreen" \
@@ -295,6 +317,8 @@ handleScreenshot() {
   whenOtherwise "$actionIsCopy" \
     "handleCopy" \
     "handleSave"
+  
+  when "$freeze" "kill $FREEZE_PID"
 }
 
 parseArgs "$@"
