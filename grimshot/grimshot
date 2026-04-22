@@ -204,10 +204,15 @@ checkRequiredTools() {
   exit
 }
 
+quit() {
+  when "$freeze" "kill $FREEZE_PID"
+  exit 1
+}
+
 selectArea() {
   GEOM=$(slurp -d)
   geomIsEmpty='[ -z "$GEOM" ]'
-  when "$geomIsEmpty" "exit 1"
+  when "$geomIsEmpty" "quit"
   WHAT="Area"
 }
 
@@ -232,14 +237,14 @@ selectOutput() {
 selectWindow() {
   GEOM=$(swaymsg -t get_tree | jq -r '.. | select(.pid? and .visible?) | .rect | "\(.x),\(.y) \(.width)x\(.height)"' | slurp -r)
   geomIsEmpty='[ -z "$GEOM" ]'
-  when "$geomIsEmpty" "exit 1"
+  when "$geomIsEmpty" "quit"
   WHAT="Window"
 }
 
 selectAnything() {
   GEOM=$(swaymsg -t get_tree | jq -r '.. | select(.pid? and .visible?) | .rect | "\(.x),\(.y) \(.width)x\(.height)"' | slurp -o)
   geomIsEmpty='[ -z "$GEOM" ]'
-  when "$geomIsEmpty" "exit 1"
+  when "$geomIsEmpty" "quit"
   WHAT="Selection"
 }
 
@@ -278,7 +283,10 @@ handleUnknownSubject() {
 }
 
 handleFreeze() {
-  wayfreeze &
+  if [[ -z "$CURSOR" ]] then
+    notCursor="--hide-cursor"
+  fi
+  wayfreeze $notCursor &
   FREEZE_PID=$!
   sleep .1;
 }
